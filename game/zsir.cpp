@@ -19,38 +19,55 @@ namespace{
 
 void Zsir::deal(){
 
-	std::shuffle(m_deckIter, m_deck.end(), prng());
+	std::shuffle(m_deckUsed.begin(), m_deckUsed.end(), prng());
 
 	for (auto p : m_players) {
 		auto &hand = m_playerCards[p];
-		char to = 4 - hand.size();
-		for (char i = 0;
-		     i<to && std::distance(m_deckIter, m_deck.end())>0;
-		     i++){
-			hand.push_back(*m_deckIter);
-			m_deckIter++;
-		}
+		
+		for (char to = 4 - hand.size(); to > 0 && m_deckUsed.size() > 0; --to){
+			hand.push_back(m_deckUsed.back());
+            m_deckUsed.pop_back();
+        }
+
 	}
+    m_unknownCards.clear();
+    std::copy(m_deckUsed.begin(), m_deckUsed.end(), std::back_inserter(m_unknownCards));
 }
 
-// TODO
 Zsir::Clone Zsir::cloneAndRandomise(Player observer) const
 {
 	auto clone = std::make_unique<Zsir>(*this);
+    Hand unseenCards = m_unknownCards;
+    for (auto p : m_players) {
+        if (p == observer)
+            continue;
+        auto const &hand = m_playerCards[p];
+        unseenCards.insert(unseenCards.end(), hand.begin(), hand.end());
+    }
+    std::shuffle(unseenCards.begin(), unseenCards.end(), prng());
+    auto u = unseenCards.begin();
+    for (auto p : m_players){
+        if (p == observer)
+            continue;
+        auto &hand = clone->m_playerCards[p];
+        std::copy_n(u, hand.size(), hand.begin());
+        u += hand.size();
+    }
 	return clone;
 }
 
 Zsir::Zsir(unsigned int players)
 	: m_numPlayers(players)
 {	
-	for (unsigned i {0}; i < s_deckSize; ++i){
-		m_deck[i] = { Card::Szin (i % 4), Card::Kep (i % 8) };
+    for (unsigned j {0}; j < 8; ++j)
+	for (unsigned i {0}; i < 4; ++i){
+		m_deck[i*8+j] = { Card::Szin (i), Card::Kep (j) };
 	}
-	m_deckIter = m_deck.begin();
+    m_deckUsed = m_deck;
 	m_players.resize(m_numPlayers);
 	std::iota(m_players.begin(), m_players.end(), 0);
 	m_playerCards.resize(m_numPlayers);
-	m_scores.resize(m_numPlayers, 0);
+	m_scores.resize(m_numPlayers);
 	deal();
 }
 
@@ -65,15 +82,14 @@ void Zsir::doMove(Card const move) {
 	auto const pos = std::find(hand.begin(), hand.end(), move);
 	if (pos < hand.end())
 		hand.erase(pos);
-	/*
 	else
 		throw std::out_of_range("pos");
-	*/
 	m_player = nextPlayer(m_player);
-	if (m_currentTrick.size() == m_numPlayers)
+	if (m_currentTrick.size() == m_numPlayers){
 		finishRound();
+    }
 	if (m_playerCards[m_player].empty() &&
-	    m_deckIter == m_deck.end())
+	    m_deckUsed.size() == 0)
 		endGame();
 	return;
 }
@@ -117,7 +133,8 @@ std::vector<Card> Zsir::validMoves() const {
 
 void Zsir::finishRound() {
 	Card::Kep trump = m_currentTrick[0].second.kep;
-	Player taker;
+    // if no one attacked, the winner is the first person
+	Player taker = 0;
 	auto i = m_currentTrick.end();
 	while (i != m_currentTrick.begin()){
 		if ( (*i).second.kep == trump ||
@@ -129,14 +146,14 @@ void Zsir::finishRound() {
 	}
 	m_scores[taker] += trickValue();
 	m_currentTrick.clear();
-	m_startingPlayer = taker;
+	// m_startingPlayer = taker;
+    m_player = taker;
 	deal();
 }
 
 // TODO
 void Zsir::endGame() {
 	finishRound();
-	std::cout << "A gyoztes: " << m_players[distance(m_scores.begin(), max_element(m_scores.begin(), m_scores.end()))];
 	m_gameOver = true;
 }
 
@@ -146,6 +163,11 @@ std::vector<Zsir::Player> Zsir::players() const {
 
 Zsir::Player Zsir::nextPlayer(Player p) const {
 	return ++p % m_numPlayers;
+}
+
+void Zsir::AIMove(){
+    ISMCTS::SOSolver<Card> solver;
+    this->doMove(solver(*this));
 }
 
 std::ostream& operator<<(std::ostream &out, Zsir const &g)
@@ -186,6 +208,13 @@ void Zsir::playTest(void) {
 	}
 }
 
+void Zsir::AITest(void) {
+    for ( auto p : m_players ) {
+        AIMove();    
+        std::cout << *this << std::endl;
+    }
+}
+
 #endif //DEBUG
 
 int main(int argc, char *argv[])
@@ -195,8 +224,10 @@ int main(int argc, char *argv[])
 	std::cout << zsir << std::endl;
 #ifdef DEBUG
 	// zsir.scoreTest();
-	zsir.playTest();
+	// zsir.playTest();
+    zsir.AITest();
 #endif //DEBUG
+    std::cout << zsir << std::endl;
 
 	return 0;
 }

@@ -1,10 +1,7 @@
 #include <SDL2/SDL.h>
+#include <assert.h>
 #include <stdio.h>
-/*
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_ONLY_PNM
-#include "stb_image.h"
-*/
+
 #include "kartyak.h"
 
 #define WIN_WIDTH 	960
@@ -20,67 +17,148 @@
 	r.y = Y; \
 } while (0)\
 
+#define RECT_POINT_COLLISION(R, X, Y) (R.x<X && R.x+R.w>X && R.y<Y && R.y+R.h>Y)
+
+#define ANIM_Y 10.0f
+#define ANIM_T 200
+
+typedef
+struct {
+    bool prev;
+    bool curr;
+} StateStruct;
+
+typedef struct {
+    SDL_Rect start;
+    SDL_Rect dest;
+    Uint32 start_time;
+    Uint32 duration;
+    enum {
+        NONE,
+        UP,
+        DOWN,
+    } state;
+} CardHoverAnim;
+
 SDL_Texture *
 create_card_texture(SDL_Renderer *renderer, unsigned char *card_data, int card_data_len){
-    	SDL_Texture* texture = SDL_CreateTexture(renderer,
-						SDL_PIXELFORMAT_RGB24,
-						SDL_TEXTUREACCESS_STATIC,
-						CARD_WIDTH,
-						CARD_HEIGHT);
-	if (!texture)
-		return texture;
 
-    	SDL_UpdateTexture(texture, NULL, card_data,  CARD_WIDTH * 3);
+    SDL_Texture* texture = SDL_CreateTexture(renderer,
+                    SDL_PIXELFORMAT_RGB24,
+                    SDL_TEXTUREACCESS_STATIC,
+                    CARD_WIDTH,
+                    CARD_HEIGHT);
+    assert(texture);
 
-	return texture;
+    SDL_UpdateTexture(texture, NULL, card_data,  CARD_WIDTH * 3);
+
+    return texture;
 }
 
 int
 main(int argc, char* argv[]) {
 
-    // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
         printf("SDL initialization failed: %s\n", SDL_GetError());
         return 1;
     }
 
-    // Create a window
-    SDL_Window* window = SDL_CreateWindow("Zsír", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIN_WIDTH, WIN_HEIGHT, SDL_WINDOW_SHOWN);
-    if (window == NULL) {
-        printf("Failed to create window: %s\n", SDL_GetError());
-        return 1;
-    }
+    SDL_Window* window = SDL_CreateWindow("Zsir",
+            SDL_WINDOWPOS_UNDEFINED,
+            SDL_WINDOWPOS_UNDEFINED,
+            WIN_WIDTH, WIN_HEIGHT,
+            SDL_WINDOW_SHOWN);
+    assert(window);
 
-    // Create a renderer
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (renderer == NULL) {
-        printf("Failed to create renderer: %s\n", SDL_GetError());
-        return 1;
-    }
+    assert(renderer);
 
-    SDL_Texture *tok_kiraly_texture = create_card_texture(renderer, __tok_kiraly_ppm, __tok_kiraly_ppm_len);
-    if (!tok_kiraly_texture) {
-	printf("Failed to create texture: %s\n", SDL_GetError());
-	return 1;
-    }
-
-    // Clear the screen
-    SDL_RenderClear(renderer);
+    SDL_Texture *tok_kiraly_texture = create_card_texture(renderer, __makk_also_ppm, __makk_also_ppm_len);
+    assert(tok_kiraly_texture);
 
     SDL_Rect tok_kiraly_rect;
-    FILL_CARD_RECT(tok_kiraly_rect, CARD_WIDTH * 4, 0);
+    FILL_CARD_RECT(tok_kiraly_rect, CARD_WIDTH * 4, 69);
 
-    SDL_RenderCopy(renderer, tok_kiraly_texture, NULL, &tok_kiraly_rect);
+    const SDL_Rect down = {
+        .x = CARD_WIDTH * 4, .y = 69, .w = CARD_WIDTH, .h = CARD_HEIGHT
+    };
 
-    SDL_RenderPresent(renderer);
+    const SDL_Rect up = {
+        .x = CARD_WIDTH * 4, .y = 59, .w = CARD_WIDTH, .h = CARD_HEIGHT
+    };
 
-    SDL_Event event;
-    for (;;) {
+    CardHoverAnim anim;
+    anim.state = CardHoverAnim::NONE;
+    bool quit  = false;
+
+    StateStruct hovering = {
+        .prev = false, .curr = false,
+    };
+
+    while (!quit) {
+
+        Uint32 tcurrent = SDL_GetTicks();
+        SDL_Event event;
         if (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
+            switch (event.type) {
+
+            case SDL_QUIT:
+                quit = true;
+                break;
+
+            case SDL_MOUSEMOTION:
+                hovering.curr = RECT_POINT_COLLISION(tok_kiraly_rect,
+                            event.motion.x,
+                            event.motion.y);
+                if (!hovering.prev && hovering.curr){
+                    if (anim.state == CardHoverAnim::NONE){
+                        anim.duration = ANIM_T;
+                        anim.dest = up; anim.start = down;
+                    }
+                    else {
+                        anim.duration = anim.duration - (tcurrent-anim.start_time);
+                        anim.start = tok_kiraly_rect;
+                        anim.dest  = up;
+                    }
+                    anim.start_time = tcurrent;
+                    anim.state = CardHoverAnim::UP;
+                }
+                else if (hovering.prev && !hovering.curr) {
+                    if (anim.state == CardHoverAnim::NONE){
+                        anim.duration = ANIM_T;
+                        anim.start = up; anim.dest = down;
+                    }
+                    else {
+                        anim.duration = anim.duration - (tcurrent-anim.start_time);
+                        anim.start = tok_kiraly_rect;
+                        anim.dest  = down;
+                    }
+                    anim.start_time = tcurrent;
+                    anim.state = CardHoverAnim::DOWN;
+                }
+                hovering.prev = hovering.curr;
+                break;
+            default:
                 break;
             }
+
         }
+
+        
+        if (anim.state != CardHoverAnim::NONE) {
+            if (tcurrent > anim.start_time + anim.duration){
+                anim.state = CardHoverAnim::NONE;
+            }
+            else {
+                float factor = ((float)(tcurrent - anim.start_time))/anim.duration;
+                tok_kiraly_rect.y = (float)anim.start.y * (1.0f-factor) + (float)anim.dest.y * factor;
+            }
+        }
+
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, tok_kiraly_texture, NULL, &tok_kiraly_rect);
+        SDL_RenderPresent(renderer);
+
     }
 
     SDL_DestroyTexture(tok_kiraly_texture);

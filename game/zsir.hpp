@@ -4,16 +4,16 @@
 #include <string>
 #include <ostream>
 
-struct Card {
+static const char *szinek[4] = { "tok", "makk", "piros", "zold" };
+static const char *kepek[8]  = { "VII", "VIII", "IX", "X", "also", "felso", "kiraly", "asz" };
 
-	const char *szinek[4] = { "tok", "makk", "piros", "zold" }; 
-	const char *kepek[8]  = { "VII", "VIII", "IX", "X", "also", "felso", "kiraly", "asz" };
+struct Card {
 
 	typedef enum { TOK, MAKK, PIROS, ZOLD } Szin;
 
 	typedef enum { VII, VIII, IX, X, ALSO, FELSO, KIRALY, ASZ } Kep;
 
-	Card() {};
+	Card() = default;
 	constexpr Card(Card::Szin szin, Card::Kep kep)
 		: szin(szin), kep(kep) {};
 
@@ -55,9 +55,11 @@ public:
 	virtual double getResult(Player player) const override;
 	virtual void doMove(Card const move) override;
 	friend std::ostream &operator<<(std::ostream &out, Zsir const &g);
+    void AIMove(void);
 #ifdef DEBUG
 	void scoreTest(void);
 	void playTest(void);
+    void AITest(void);
 #endif // DEBUG
 
 protected:
@@ -66,11 +68,11 @@ protected:
 
 	unsigned int static constexpr s_deckSize {32};
 	std::vector<Card> m_deck { s_deckSize };
+    std::vector<Card> m_deckUsed { s_deckSize };
 	std::vector<Card> m_unknownCards;
 	std::vector<Hand> m_playerCards;
 	std::vector<Play> m_currentTrick;
 	std::vector<unsigned int> m_scores;
-	std::vector<Card>::iterator m_deckIter;
 	Player m_numPlayers;
 	Player m_player {0};
 	Player m_startingPlayer {0};
