@@ -1,5 +1,5 @@
 from enum import Enum
-from random import shuffle
+from random import shuffle, choice
 
 class Colors(Enum):
     TOK   = 0
@@ -55,6 +55,12 @@ class Card:
         self.color = color
         self.figure = figure
 
+    def __repr__(self):
+        return f"{Colors(self.color).name} {Figures(self.figure).name}"
+    
+    def __eq__(self, other):
+        return self.figure == other.figure and self.color == other.color
+
 deck = [
     Card(Colors.TOK, Figures.VII),
     Card(Colors.TOK, Figures.VIII),
@@ -101,14 +107,35 @@ class Player:
         self.is_ai = is_ai
 
 class Zsir:
-    def __init__(self, players):
+    def __init__(self, players, human):
         self.players = players
+        self.human = human
+        self.current_player = 0
         self.num_players = len(players)
         self.deck = deck.copy()
         self.house = []
         shuffle(self.deck)
     
     def deal(self):
-        for i in range(4):
-            for i in range(self.num_players):
+        for i in range(self.num_players):
+            for j in range(4 - len(self.players[i].hand)):
                 self.players[i].hand.append(self.deck.pop())
+
+    def make_move(self, card):
+        self.house.append(card)
+        self.players[self.current_player].hand.remove(card)
+        self.next_player()
+        self.print_house()
+        
+    def next_player(self):
+        self.current_player = (self.current_player + 1) % self.num_players
+
+    def print_house(self):
+        for card in reversed(self.house):
+            print(card)
+
+    def ai_move(self):
+        return choice(self.players[self.current_player].hand)
+    
+    def evaluate_game(self):
+        pass

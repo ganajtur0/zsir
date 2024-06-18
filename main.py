@@ -37,7 +37,8 @@ class CardSprite(pg.sprite.Sprite):
                  topleft_x,
                  topleft_y,
                  hidden=False,
-                 flipped=False):
+                 flipped=False,
+                 clickable=True):
         pg.sprite.Sprite.__init__(self)
         self.card = card
         self.name = card_filename(card)
@@ -50,6 +51,7 @@ class CardSprite(pg.sprite.Sprite):
         if self.flipped:
             self.image = pg.transform.flip(self.image, False, True)
         self.rect.topleft = (topleft_x, topleft_y)
+        self.clickable = clickable
 
         self.timer_down = True
         self.timer_start = None
@@ -117,6 +119,22 @@ class CardSprite(pg.sprite.Sprite):
             self.timer_down = True
 
 
+class HouseSprite(pg.sprite.Sprite):
+    def __init__(self):
+        pg.sprite.Sprite.__init__(self)
+        self.image, _ = load_image("lapok/ures.png")
+        scr_width, scr_height = pg.display.get_surface().get_size()
+        self.rect = pg.Rect(scr_width/2 - CARD_WIDTH/2,
+                            scr_height/2 - CARD_HEIGHT/2,
+                            CARD_WIDTH,
+                            CARD_HEIGHT)
+        self.clickable = False
+    def update_image(self, image):
+        self.image = image
+    def update(self):
+        pass
+
+
 def rearrange_card_sprites(card_sprites):
     try:
         y = card_sprites[0].rect.top
@@ -124,7 +142,6 @@ def rearrange_card_sprites(card_sprites):
         return
     SCREEN_WIDTH, _ = pg.display.get_surface().get_size()
     scr_width_half = SCREEN_WIDTH//2
-    print(len(card_sprites))
     match len(card_sprites):
         case 4:
             card_sprites[0].move_to(scr_width_half - 2*CARD_WIDTH, y)
@@ -142,11 +159,18 @@ def rearrange_card_sprites(card_sprites):
             card_sprites[0].move_to(scr_width_half - 0.5*CARD_WIDTH, y)
         case _:
             return
-        
+
+def update_hand(game, house_sprite, hand, card_sprite):
+    game.make_move(card_sprite.card)
+    hand.remove(card_sprite)
+    house_sprite.update_image(card_sprite.image)
+    rearrange_card_sprites(hand)
+    card_sprite.kill()
 
 def main():
     zsirjatek = Zsir([Player("Te", False),
-                     Player("Gyula", True)])
+                     Player("Gyula", True)],
+                     0)
     pg.init()
     screen = pg.display.set_mode((1280, 720), pg.SCALED)
     pg.display.set_caption("Zsír")
@@ -171,11 +195,14 @@ def main():
     opponent_hand = [CardSprite(zsirjatek.players[1].hand[i],
                                400 + i * CARD_WIDTH,
                                opponent_cards_y,
-                               hidden=True,
-                               flipped=True)
+                               hidden=False,
+                               flipped=True,
+                               clickable=False)
                     for i in range(4)]
     
-    card_sprites = player_hand + opponent_hand
+    house_sprite = HouseSprite()
+    
+    card_sprites = player_hand + opponent_hand + [house_sprite]
 
     allsprites = pg.sprite.RenderPlain(card_sprites)
 
@@ -184,20 +211,26 @@ def main():
     going = True
     while going:
         clock.tick(60)
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                going = False
-            elif event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
-                going = False
-            elif event.type == pg.MOUSEBUTTONUP:
-                pos = pg.mouse.get_pos()
-                clicked_cards = [card for card in allsprites if card.rect.collidepoint(pos)]
-                for card_sprite in clicked_cards:
-                    print(card_sprite.name)
-                    zsirjatek.house.append(card_sprite.card)
-                    player_hand.remove(card_sprite)
-                    rearrange_card_sprites(player_hand)
-                    card_sprite.kill()
+        if zsirjatek.current_player == zsirjatek.human:
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    going = False
+                elif event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+                    going = False
+                elif event.type == pg.MOUSEBUTTONUP:
+                    pos = pg.mouse.get_pos()
+                    clicked_cards = [card for card in allsprites if card.rect.collidepoint(pos)]
+                    for card_sprite in clicked_cards:
+                        if card_sprite.clickable:
+                            update_hand(zsirjatek, house_sprite, player_hand, card_sprite)
+                            break
+        else:
+            ai_card = zsirjatek.ai_move()
+            for card_sprite in opponent_hand:
+                if card_sprite.card == ai_card:
+                    update_hand(zsirjatek, house_sprite, opponent_hand, card_sprite)
+                    break
+
         allsprites.update()
         screen.blit(background, (0, 0))
         allsprites.draw(screen)
