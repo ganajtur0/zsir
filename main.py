@@ -31,6 +31,58 @@ def load_image(name, scale=1):
     return image, image.get_rect()
 
 
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0) 
+
+
+class ButtonSprite(pg.sprite.Sprite):
+    def __init__(self,
+                 pos,
+                 width,
+                 height,
+                 color,
+                 hover_color,
+                 text,
+                 onclick_function):
+        pg.sprite.Sprite.__init__(self)
+
+        self.onclick_function = onclick_function
+
+        self.color = color
+        self.hover_color = hover_color
+
+        self.image = pg.Surface([width, height])
+
+        self.rect = self.image.get_rect(center=pos)
+        
+        self.text = text    
+        self.font = pg.font.Font(None, 24)
+
+        self.image.fill(self.color)
+        self.render_text()
+        
+        self.handled = False
+
+    def update(self):
+        if self.rect.collidepoint(pg.mouse.get_pos()):
+            self.image.fill(self.hover_color)
+            if (pg.mouse.get_pressed()[0] and 
+                not self.handled):
+                self.handled = True
+                self.onclick_function()
+            if (not pg.mouse.get_pressed()[0] and
+                self.handled):
+                self.handled = False
+        else:
+            self.image.fill(self.color)
+        self.image.blit(self.text_surface, self.text_rect)
+
+    def render_text(self):
+        self.text_surface = self.font.render(self.text, True, BLACK)
+        self.text_rect = self.text_surface.get_rect(center=(self.rect.width // 2, self.rect.height // 2))
+        self.image.blit(self.text_surface, self.text_rect)
+
+
 class CardSprite(pg.sprite.Sprite):
     def __init__(self,
                  card,
@@ -187,6 +239,9 @@ def update_hand(game, house_sprite, hand, card_sprite):
     rearrange_card_sprites(hand)
     card_sprite.kill()
 
+def debug_print():
+    print("ELENGED")
+
 def main():
     zsirjatek = Zsir([Player("Te", False),
                      Player("Gyula", True)],
@@ -221,10 +276,19 @@ def main():
                     for i in range(4)]
     
     house_sprite = HouseSprite()
+
+    button_sprite = ButtonSprite((SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 150),
+                                 200, 60,
+                                 (140, 170, 160),
+                                 (70, 80, 80),
+                                 "Elenged",
+                                  debug_print)
     
     card_sprites = player_hand + opponent_hand + [house_sprite]
+    button_sprites = [button_sprite]
 
-    allsprites = pg.sprite.RenderPlain(card_sprites)
+    card_spritegroup = pg.sprite.RenderPlain(card_sprites)
+    button_spritegroup = pg.sprite.RenderPlain(button_sprites)
 
     clock = pg.time.Clock()
 
@@ -241,7 +305,7 @@ def main():
                     going = False
                 elif event.type == pg.MOUSEBUTTONUP:
                     pos = pg.mouse.get_pos()
-                    clicked_cards = [card for card in allsprites if card.rect.collidepoint(pos)]
+                    clicked_cards = [card for card in card_spritegroup if card.rect.collidepoint(pos)]
                     for card_sprite in clicked_cards:
                         if card_sprite.clickable:
                             update_hand(zsirjatek, house_sprite, player_hand, card_sprite)
@@ -255,9 +319,11 @@ def main():
                         update_hand(zsirjatek, house_sprite, opponent_hand, card_sprite)
                         break
 
-        allsprites.update()
+        card_spritegroup.update()
+        button_spritegroup.update()
         screen.blit(background, (0, 0))
-        allsprites.draw(screen)
+        card_spritegroup.draw(screen)
+        button_spritegroup.draw(screen)
         pg.display.flip()
 
     pg.quit()
