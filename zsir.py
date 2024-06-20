@@ -105,15 +105,18 @@ class Player:
         self.hand = []
         self.collected = []
         self.is_ai = is_ai
+        self.stash = []
 
 class Zsir:
     def __init__(self, players, human):
         self.players = players
         self.human = human
         self.current_player = 0
+        self.first_player = 0
         self.num_players = len(players)
         self.deck = deck.copy()
         self.house = []
+        self.last_round_winner = -1
         shuffle(self.deck)
     
     def deal(self):
@@ -137,5 +140,18 @@ class Zsir:
     def ai_move(self):
         return choice(self.players[self.current_player].hand)
     
-    def evaluate_game(self):
-        pass
+    def evaluate_round(self):    
+        takes_trick = 0
+        for i in range(1, self.num_players):
+            if (self.house[i].figure == self.house[0].figure or
+                self.house[i].figure == Figures.VII):
+                takes_trick = i
+        if (len(self.house) == self.num_players
+            and takes_trick != 0):
+            # TODO: elengedés
+            pass
+        self.players[takes_trick].stash += self.house
+        self.house = []
+        self.first_player = takes_trick
+        self.last_round_winner = takes_trick
+            

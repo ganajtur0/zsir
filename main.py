@@ -119,6 +119,26 @@ class CardSprite(pg.sprite.Sprite):
             self.timer_down = True
 
 
+class Timer:
+    def __init__(self):
+        self.timeout = 200
+        self.start_time = 0
+        self.started = False
+    
+    def start(self, timeout=200):
+        self.timeout = timeout
+        self.start_time = pg.time.get_ticks()
+        self.started = True
+    
+    def tick(self):
+        if not self.started:
+            return True
+        if pg.time.get_ticks() - self.start_time >= self.timeout:
+            self.started = False
+            return True
+        return False
+
+
 class HouseSprite(pg.sprite.Sprite):
     def __init__(self):
         pg.sprite.Sprite.__init__(self)
@@ -208,6 +228,8 @@ def main():
 
     clock = pg.time.Clock()
 
+    timer = Timer()
+
     going = True
     while going:
         clock.tick(60)
@@ -223,13 +245,15 @@ def main():
                     for card_sprite in clicked_cards:
                         if card_sprite.clickable:
                             update_hand(zsirjatek, house_sprite, player_hand, card_sprite)
+                            timer.start(timeout=1000)
                             break
         else:
-            ai_card = zsirjatek.ai_move()
-            for card_sprite in opponent_hand:
-                if card_sprite.card == ai_card:
-                    update_hand(zsirjatek, house_sprite, opponent_hand, card_sprite)
-                    break
+            if timer.tick():
+                ai_card = zsirjatek.ai_move()
+                for card_sprite in opponent_hand:
+                    if card_sprite.card == ai_card:
+                        update_hand(zsirjatek, house_sprite, opponent_hand, card_sprite)
+                        break
 
         allsprites.update()
         screen.blit(background, (0, 0))
