@@ -117,21 +117,32 @@ class Zsir:
         self.deck = deck.copy()
         self.house = []
         self.last_round_winner = -1
+        self.round = 0
+        self.let_it_go_decision = False
         shuffle(self.deck)
     
+    # DEBUG:
+    def deal(self):
+        for _ in range(4 - len(self.players[0].hand)):
+            self.players[0].hand.append(self.deck.pop())
+        for i in range(4 - len(self.players[1].hand)):
+            self.players[1].hand.append(Card(Colors(i), Figures.VII))
+    '''
     def deal(self):
         for i in range(self.num_players):
             for j in range(4 - len(self.players[i].hand)):
                 self.players[i].hand.append(self.deck.pop())
+    '''
 
     def make_move(self, card):
         self.house.append(card)
         self.players[self.current_player].hand.remove(card)
-        self.next_player()
-        self.print_house()
         
     def next_player(self):
         self.current_player = (self.current_player + 1) % self.num_players
+        if self.current_player == self.first_player:
+            return True
+        return False
 
     def print_house(self):
         for card in reversed(self.house):
@@ -140,18 +151,24 @@ class Zsir:
     def ai_move(self):
         return choice(self.players[self.current_player].hand)
     
-    def evaluate_round(self):    
+    # returns True if a decision has to be made
+    def evaluate_round(self):
+        self.print_house()
         takes_trick = 0
         for i in range(1, self.num_players):
             if (self.house[i].figure == self.house[0].figure or
                 self.house[i].figure == Figures.VII):
                 takes_trick = i
         if (len(self.house) == self.num_players
-            and takes_trick != 0):
-            # TODO: elengedés
-            pass
+            and takes_trick != 0
+            and not self.let_it_go_decision):
+            return True
+        self.let_it_go_decision = False
+        print(f"A kört a {takes_trick}. játékos viszi")
         self.players[takes_trick].stash += self.house
         self.house = []
         self.first_player = takes_trick
-        self.last_round_winner = takes_trick
-            
+        self.current_player = self.first_player
+        self.last_round_winner = takes_trick   
+        self.deal() 
+        return False  
