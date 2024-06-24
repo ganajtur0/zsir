@@ -1,6 +1,8 @@
 import pygame as pg
 import os
+from tween import *
 from enum import Enum
+
 from zsir import *
 
 class ANIM_DIRECTION(Enum):
@@ -82,9 +84,9 @@ class ButtonSprite(pg.sprite.Sprite):
                     self.rect.move_ip(0, -5)
             else:
                 self.image.fill(self.color)
+            self.image.blit(self.text_surface, self.text_rect)
         else:
             self.image.fill(self.disabled_color)
-        self.image.blit(self.text_surface, self.text_rect)
 
     def render_text(self):
         self.text_surface = self.font.render(self.text, False, BLACK)
@@ -161,6 +163,7 @@ class CardSprite(pg.sprite.Sprite):
                     else:
                         self.rect.top = self.anim_target_bottom
                         self.animating = False
+            self.last_time = pg.time.get_ticks()
 
         self._update_timer()
 
@@ -182,12 +185,12 @@ class CardSprite(pg.sprite.Sprite):
 
 class Timer:
     def __init__(self):
-        self.timeout = 200
+        self.timeout = 1
         self.start_time = 0
         self.started = False
     
-    def start(self, timeout=200):
-        self.timeout = timeout
+    def start(self, timeout=1):
+        self.timeout = timeout * 1000
         self.start_time = pg.time.get_ticks()
         self.started = True
     
@@ -204,24 +207,67 @@ class HouseSprite(pg.sprite.Sprite):
     def __init__(self):
         pg.sprite.Sprite.__init__(self)
         self.image = pg.Surface((CARD_WIDTH, CARD_HEIGHT))
-        scr_width, scr_height = pg.display.get_surface().get_size()
-        self.rect = self.image.get_rect(center=(scr_width//2, scr_height//2))
+        self.scr_width, self.scr_height = pg.display.get_surface().get_size()
+        self.rect = self.image.get_rect(center=(self.scr_width//2, self.scr_height//2))
         self.image.fill(BACKGROUND_COLOR)
         self.clickable = False
+        self.animating = False
+        self.animation_max_y = self.scr_height - CARD_HEIGHT
+        self.animation_max_x = self.scr_width - 2*CARD_WIDTH
 
     def update_image(self, image):
         self.image = image
 
+    def animate(self, position):
+        match(position):
+            case 0:
+                self.animation_max_y = self.scr_height
+                self.animation_max_x = 2*CARD_WIDTH
+            case 1:
+                self.animation_max_y = -CARD_HEIGHT
+                self.animation_max_x = 2*CARD_WIDTH
+            case 2:
+                self.animation_max_y = self.scr_height - CARD_HEIGHT
+                self.animation_max_x = self.scr_width - 2*CARD_WIDTH
+            case 3:
+                self.animation_max_y = self.scr_height - CARD_HEIGHT
+                self.animation_max_x = self.scr_width - 2*CARD_WIDTH
+
+        self.animating = True
+        self.tween_y = Tween(self.rect.y,
+                           end=self.animation_max_y,
+                           duration=500,
+                           easing=Easing.LINEAR,
+                           easing_mode=EasingMode.OUT)
+        self.tween_x = Tween(self.rect.x,
+                           end=self.animation_max_x,
+                           duration=500,
+                           easing=Easing.LINEAR,
+                           easing_mode=EasingMode.OUT)
+        self.tween_x.start()
+        self.tween_y.start()
+
     def update(self):
-        pass
+        if self.animating:
+            self.tween_y.update()
+            self.tween_x.update()
+            self.rect.y = self.tween_y.value
+            self.rect.x = self.tween_x.value
+            if (round(self.tween_y.value) == self.animation_max_y or
+                round(self.tween_x.value) == self.animation_max_x):
+                self.reset()
 
     def reset(self):
+        self.animating = False
         self.image = pg.Surface((CARD_WIDTH, CARD_HEIGHT))
+        self.rect = self.image.get_rect(center=(self.scr_width//2, self.scr_height//2))
         self.image.fill(BACKGROUND_COLOR)
 
 
 class GameGUI:
     def __init__(self):
+        self.animation_playing = False
+        self.timer = Timer()
         self.card_spritegroup = pg.sprite.Group()
         self.button_spritegroup = pg.sprite.Group()
         self.pg_init()
@@ -233,6 +279,8 @@ class GameGUI:
         self.SCREEN_WIDTH, self.SCREEN_HEIGHT = pg.display.get_surface().get_size()
         self.player_cards_y = self.SCREEN_HEIGHT // 2 + CARD_HEIGHT * 1.5
         self.opponent_cards_y = -1 * CARD_HEIGHT // 2
+
+        self.font = pg.font.Font(None, 24)
 
         self.background = pg.Surface(self.screen.get_size())
         self.background = self.background.convert()
@@ -308,7 +356,7 @@ class GameGUI:
                            200, 60,
                            (140, 170, 160),
                            (70, 80, 80),
-                           BLACK,
+                           BACKGROUND_COLOR,
                            "Elenged",
                            self.let_it_go)
         self.house_sprite = HouseSprite()
@@ -351,8 +399,11 @@ class GameGUI:
         if self.zsirjatek.evaluate_round():
             self.let_it_go_button.enabled = True
             return
+        self.house_sprite.animate(self.zsirjatek.current_player)
         self.update_card_sprites()
-        self.house_sprite.reset()
+        if self.zsirjatek.current_player != self.zsirjatek.human:
+            self.timer.start(1)
+        # self.house_sprite.reset()
         self.let_it_go_button.enabled = False
 
     def handle_click(self):
@@ -364,7 +415,7 @@ class GameGUI:
                 if self.zsirjatek.next_player():
                     self.finish_round()
                 else:
-                    self.timer.start(timeout=1000)
+                    self.timer.start(1)
                 break
 
     def eventhandler(self, event):
@@ -376,6 +427,9 @@ class GameGUI:
                     self.going = False
             case pg.MOUSEBUTTONUP:
                 self.handle_click()
+
+    def set_timer_down(self):
+        self.timer_down = True
 
     def redraw(self):
         self.card_spritegroup.update()
@@ -394,10 +448,17 @@ class GameGUI:
                     self.eventhandler(event)
             else:
                 if self.timer.tick():
-                    ai_card = self.zsirjatek.ai_move()
+                    ai_card = self.zsirjatek.ai_move(self.let_it_go_button.enabled)
+                    if not ai_card:
+                        self.let_it_go()
+                        self.finish_round()
+                        continue
                     for sprite in self.opponent1_cards:
                         if sprite.card == ai_card:
                             self.update_hand(self.opponent1_cards, sprite)
+                            self.timer.start(1)
+                            while not self.timer.tick():
+                                self.redraw()
                             if self.zsirjatek.next_player():
                                 self.finish_round()
                             break
