@@ -109,8 +109,10 @@ class CardSprite(pg.sprite.Sprite):
         self.flipped = flipped
         if self.hidden:
             self.image, self.rect = load_image(os.path.join("lapok", "hatlap.jpg"))
+            self.display_image, _ = load_image(os.path.join("lapok", f"{self.name}.jpg"))
         else:
             self.image, self.rect = load_image(os.path.join("lapok", f"{self.name}.jpg"))
+            self.display_image = self.image
         if self.flipped:
             self.image = pg.transform.flip(self.image, False, True)
         self.rect.topleft = (topleft_x, topleft_y)
@@ -263,11 +265,40 @@ class HouseSprite(pg.sprite.Sprite):
         self.rect = self.image.get_rect(center=(self.scr_width//2, self.scr_height//2))
         self.image.fill(BACKGROUND_COLOR)
 
+class GameOverScreen(pg.sprite.Sprite):
+    def __init__(self,
+                 size,
+                 padding,
+                 player_names,
+                 player_scores,
+                 text):
+        pg.sprite.Sprite.__init__(self)
+        self.image = pg.Surface(size)
+        self.scr_width, self.scr_height = pg.display.get_surface().get_size()
+        self.rect = self.image.get_rect(center=(self.scr_width//2, self.scr_height//2))
+        self.image.fill(pg.Color("pink"))
+        self.main_font = pg.font.Font(None, 24)
+        self.main_font.bold = True
+        self.subfont = pg.font.Font(None, 24)
+        self.text = text
+        self.padding = padding
+        self.names = player_names
+        self.scores = player_scores
+    
+    # TODO: render the rest
+    def render_text(self):
+        self.main_font_surface = self.main_font.render(self.text)
+        self.main_font_rect = self.main_font_surface.get_rect(center=(self.scr_width//2,
+                                                                      self.rect.y + self.padding[1] + 10))
+        self.image.blit(self.main_font_surface, self.main_font_rect)
 
 class GameGUI:
     def __init__(self):
         self.animation_playing = False
         self.timer = Timer()
+        # DEBUG
+        self.game_over = True
+        self.has_screen = False
         self.card_spritegroup = pg.sprite.Group()
         self.button_spritegroup = pg.sprite.Group()
         self.pg_init()
@@ -310,7 +341,7 @@ class GameGUI:
             self.card_spritegroup.add(self.player_cards)
             self.opponent1_cards = [
                 CardSprite(card, 0, self.opponent_cards_y,
-                           hidden = False, flipped=True,
+                           hidden=True, flipped=True,
                            clickable=False)
                 for card in self.zsirjatek.players[1].hand
             ]
@@ -332,7 +363,7 @@ class GameGUI:
             opponent1_cards = [card_sprite.card for card_sprite in self.opponent1_cards]
             opponent1_new_cards = [
                 CardSprite(card, 0, self.opponent_cards_y,
-                           hidden = False, flipped=True,
+                           hidden=True, flipped=True,
                            clickable=False)
                 for card in self.zsirjatek.players[1].hand
                 if card not in opponent1_cards
@@ -361,7 +392,12 @@ class GameGUI:
                            self.let_it_go)
         self.house_sprite = HouseSprite()
         self.button_spritegroup.add((self.let_it_go_button, self.house_sprite))
-        
+
+    def game_over_screen(self):
+        self.button_spritegroup.add(GameOverScreen((480, 480),
+                                                   (20, 20),
+                                                   [], [], "Azoszt igen ez igen"))
+        self.has_screen = True
     
     def rearrange_card_sprites(self, card_sprites):
         scr_width_half = self.SCREEN_WIDTH // 2
@@ -391,7 +427,7 @@ class GameGUI:
     def update_hand(self, hand, card_sprite):
         self.zsirjatek.make_move(card_sprite.card)
         hand.remove(card_sprite)
-        self.house_sprite.update_image(card_sprite.image)
+        self.house_sprite.update_image(card_sprite.display_image)
         self.rearrange_card_sprites(hand)
         card_sprite.kill()
     
@@ -401,10 +437,12 @@ class GameGUI:
             return
         self.house_sprite.animate(self.zsirjatek.current_player)
         self.update_card_sprites()
-        if self.zsirjatek.current_player != self.zsirjatek.human:
-            self.timer.start(1)
-        # self.house_sprite.reset()
-        self.let_it_go_button.enabled = False
+        self.timer.start(1)
+
+    def wait(self, seconds):
+        self.timer.start(seconds)
+        while not self.timer.tick():
+            self.redraw()
 
     def handle_click(self):
         pos = pg.mouse.get_pos()
@@ -412,10 +450,28 @@ class GameGUI:
         for sprite in clicked_cards:
             if sprite.clickable:
                 self.update_hand(self.player_cards, sprite)
+                self.wait(0.5)
                 if self.zsirjatek.next_player():
                     self.finish_round()
                 else:
+                    self.let_it_go_button.enabled = False
                     self.timer.start(1)
+                break
+
+    def handle_ai_move(self):
+        ai_card = self.zsirjatek.ai_move(self.let_it_go_button.enabled)
+        if not ai_card:
+            self.let_it_go()
+            self.finish_round()
+            return
+        for sprite in self.opponent1_cards:
+            if sprite.card == ai_card:
+                self.update_hand(self.opponent1_cards, sprite)
+                self.wait(0.5)
+                if self.zsirjatek.next_player():
+                    self.finish_round()
+                else:
+                    self.let_it_go_button.enabled = False
                 break
 
     def eventhandler(self, event):
@@ -443,25 +499,16 @@ class GameGUI:
         self.going = True
         while (self.going):
             self.clock.tick(60)
-            if self.zsirjatek.current_player == self.zsirjatek.human:
-                for event in pg.event.get():
-                    self.eventhandler(event)
+            if self.game_over and not self.has_screen:
+                self.game_over_screen()
             else:
                 if self.timer.tick():
-                    ai_card = self.zsirjatek.ai_move(self.let_it_go_button.enabled)
-                    if not ai_card:
-                        self.let_it_go()
-                        self.finish_round()
-                        continue
-                    for sprite in self.opponent1_cards:
-                        if sprite.card == ai_card:
-                            self.update_hand(self.opponent1_cards, sprite)
-                            self.timer.start(1)
-                            while not self.timer.tick():
-                                self.redraw()
-                            if self.zsirjatek.next_player():
-                                self.finish_round()
-                            break
+                    if self.zsirjatek.current_player == self.zsirjatek.human:
+                        for event in pg.event.get():
+                            self.eventhandler(event)
+                    elif self.zsirjatek.current_player != self.zsirjatek.human:
+                        self.handle_ai_move()
+                    
             self.redraw()
         pg.quit()
 

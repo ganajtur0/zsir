@@ -1,3 +1,4 @@
+from math import ceil
 from enum import Enum
 from random import shuffle, choice
 
@@ -120,21 +121,14 @@ class Zsir:
         self.round = 0
         self.let_it_go_decision = False
         shuffle(self.deck)
-    '''
-    # DEBUG:
-    def deal(self):
-        for _ in range(4 - len(self.players[0].hand)):
-            self.players[0].hand.append(self.deck.pop())
-        for i in range(4 - len(self.players[1].hand)):
-            self.players[1].hand.append(Card(Colors(i), Figures.VII))
-    '''
+
     def deal(self):
         if len(self.deck) == 0:
             print("Vége")
             return
         for i in range(self.num_players):
             for j in range(min(4 - len(self.players[i].hand),
-                               len(self.deck)//2)):
+                               ceil(len(self.deck)/2))):
                 self.players[i].hand.append(self.deck.pop())
 
     def make_move(self, card):
@@ -168,11 +162,7 @@ class Zsir:
                 return True
         return False
 
-    # returns True if a decision has to be made
-    # TODO: fix when there are three cads in house, the player is taking,
-    # and the AI simply decides to let it go without putting a card in
     def evaluate_round(self):
-        self.print_house()
         takes_trick = self.first_player
         for i in range(0, len(self.house)):
             if (
@@ -180,13 +170,13 @@ class Zsir:
                 self.house[i].figure == Figures.VII
                 ):
                 takes_trick = (self.first_player + i%self.num_players) % self.num_players
-        print("takes trick:", takes_trick)
         if (len(self.house) == self.num_players
             and takes_trick != self.first_player
             and not self.let_it_go_decision
             and self.can_do_it(self.current_player)):
             return True
         self.let_it_go_decision = False
+        self.print_house()
         print(f"A kört {self.players[takes_trick].name} játékos viszi")
         self.players[takes_trick].stash += self.house
         self.house = []
