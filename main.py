@@ -89,7 +89,7 @@ class ButtonSprite(pg.sprite.Sprite):
             self.image.fill(self.disabled_color)
 
     def render_text(self):
-        self.text_surface = self.font.render(self.text, False, BLACK)
+        self.text_surface = self.font.render(self.text, True, BLACK)
         self.text_rect = self.text_surface.get_rect(center=(self.rect.width // 2, self.rect.height // 2))
         self.image.blit(self.text_surface, self.text_rect)
 
@@ -277,27 +277,56 @@ class GameOverScreen(pg.sprite.Sprite):
         self.scr_width, self.scr_height = pg.display.get_surface().get_size()
         self.rect = self.image.get_rect(center=(self.scr_width//2, self.scr_height//2))
         self.image.fill(pg.Color("pink"))
-        self.main_font = pg.font.Font(None, 24)
-        self.main_font.bold = True
+        self.title_font = pg.font.Font(None, 40)
+        self.title_font.bold = True
         self.subfont = pg.font.Font(None, 24)
         self.text = text
         self.padding = padding
         self.names = player_names
         self.scores = player_scores
+        self.render_text()
     
     # TODO: render the rest
     def render_text(self):
-        self.main_font_surface = self.main_font.render(self.text)
-        self.main_font_rect = self.main_font_surface.get_rect(center=(self.scr_width//2,
-                                                                      self.rect.y + self.padding[1] + 10))
-        self.image.blit(self.main_font_surface, self.main_font_rect)
+        self.title_font_surface = self.title_font.render(self.text, True, BLACK)
+        self.title_font_rect = self.title_font_surface.get_rect(center=(self.rect.width//2, self.padding[1]))
+        self.player_texts = []
+        for i in range(len(self.names)):
+            name_surface = self.subfont.render(self.names[i], True, BLACK)
+            name_rect = name_surface.get_rect()
+            name_rect.x = self.padding[0]
+            name_rect.y = self.padding[1] * (i*2+4)
+            score_surface = self.subfont.render(str(self.scores[i]), True, BLACK)
+            score_rect = score_surface.get_rect()
+            score_rect.x = self.rect.width - self.padding[0] - score_rect.width
+            score_rect.y = self.padding[1] * (i*2+4)
+            self.player_texts.append([(name_surface, name_rect),(score_surface, score_rect)])
+
+        self.image.blit(self.title_font_surface, self.title_font_rect)
+
+        for player_text in self.player_texts:
+            self.image.blit(player_text[0][0], player_text[0][1])
+            self.image.blit(player_text[1][0], player_text[1][1])
+
+        self.tween = Tween(self.title_font_rect.height//2 + self.padding[1],
+                           self.title_font_rect.height//2 + self.padding[1]*2,
+                           duration=800, easing=EasingMode.IN_OUT,
+                           boomerang=True, loop=True)
+        self.tween.start()
+
+    def update(self):
+        self.tween.update()
+        self.title_font_rect.y = self.tween.value
+        self.image.fill(pg.Color("pink"))
+        self.image.blit(self.title_font_surface, self.title_font_rect)
+        for player_text in self.player_texts:
+            self.image.blit(player_text[0][0], player_text[0][1])
+            self.image.blit(player_text[1][0], player_text[1][1])
 
 class GameGUI:
     def __init__(self):
         self.animation_playing = False
         self.timer = Timer()
-        # DEBUG
-        self.game_over = True
         self.has_screen = False
         self.card_spritegroup = pg.sprite.Group()
         self.button_spritegroup = pg.sprite.Group()
@@ -394,9 +423,17 @@ class GameGUI:
         self.button_spritegroup.add((self.let_it_go_button, self.house_sprite))
 
     def game_over_screen(self):
+        result = self.zsirjatek.evaluate_game()
+        match (result):
+            case EndResult.WON:
+                final_text = "Azoszt igen ez igen"
+            case EndResult.LOST:
+                final_text = "Gyakorolj még asztán keress meg"
         self.button_spritegroup.add(GameOverScreen((480, 480),
                                                    (20, 20),
-                                                   [], [], "Azoszt igen ez igen"))
+                                                   [p.name for p in self.zsirjatek.players],
+                                                   [p.score for p in self.zsirjatek.players],
+                                                   final_text))     
         self.has_screen = True
     
     def rearrange_card_sprites(self, card_sprites):
@@ -482,7 +519,8 @@ class GameGUI:
                 if event.key == pg.K_ESCAPE:
                     self.going = False
             case pg.MOUSEBUTTONUP:
-                self.handle_click()
+                if not self.zsirjatek.game_over:
+                    self.handle_click()
 
     def set_timer_down(self):
         self.timer_down = True
@@ -499,16 +537,18 @@ class GameGUI:
         self.going = True
         while (self.going):
             self.clock.tick(60)
-            if self.game_over and not self.has_screen:
-                self.game_over_screen()
+            if self.zsirjatek.game_over:
+                if not self.has_screen:
+                    self.game_over_screen()
+                for event in pg.event.get():
+                    self.eventhandler(event)
             else:
                 if self.timer.tick():
                     if self.zsirjatek.current_player == self.zsirjatek.human:
                         for event in pg.event.get():
                             self.eventhandler(event)
                     elif self.zsirjatek.current_player != self.zsirjatek.human:
-                        self.handle_ai_move()
-                    
+                        self.handle_ai_move()    
             self.redraw()
         pg.quit()
 

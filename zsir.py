@@ -18,6 +18,11 @@ class Figures(Enum):
     KIRALY = 6
     ASZ    = 7
 
+class EndResult(Enum):
+    LOST = 0
+    DRAW = 1
+    WON = 2
+
 def card_filename(card):
     match card.color:
         case Colors.TOK:
@@ -103,6 +108,7 @@ deck = [
 class Player:
     def __init__(self, name, is_ai):
         self.name = name
+        self.score = 0
         self.hand = []
         self.collected = []
         self.is_ai = is_ai
@@ -110,6 +116,7 @@ class Player:
 
 class Zsir:
     def __init__(self, players, human):
+        self.game_over = False
         self.players = players
         self.human = human
         self.current_player = 0
@@ -123,8 +130,10 @@ class Zsir:
         shuffle(self.deck)
 
     def deal(self):
-        if len(self.deck) == 0:
+        if (len(self.deck) == 0 and 
+            sum([len(p.hand) for p in self.players]) == 0):
             print("Vége")
+            self.game_over = True
             return
         for i in range(self.num_players):
             for j in range(min(4 - len(self.players[i].hand),
@@ -161,6 +170,28 @@ class Zsir:
                 or card.figure == Figures.VII):
                 return True
         return False
+    
+    # calculates scores, returns state of game
+    def evaluate_game(self):
+        for player in self.players:
+            for card in player.stash:
+                if (card.figure == Figures.X or
+                    card.figure == Figures.ASZ):
+                    player.score += 10
+        score = self.players[0].score
+        draw = True
+        for player in self.players[1:]:
+            if player.score != score:
+                draw = False
+                break
+        if draw:
+            self.players[self.current_player].score += 1
+        player_score = self.players[self.human].score
+        for i, player in enumerate(self.players):
+            if i != self.human:
+                if player.score > player_score:
+                    return EndResult.LOST
+        return EndResult.WON
 
     def evaluate_round(self):
         takes_trick = self.first_player
@@ -170,7 +201,8 @@ class Zsir:
                 self.house[i].figure == Figures.VII
                 ):
                 takes_trick = (self.first_player + i%self.num_players) % self.num_players
-        if (len(self.house) == self.num_players
+        #if (len(self.house) == self.num_players
+        if (True
             and takes_trick != self.first_player
             and not self.let_it_go_decision
             and self.can_do_it(self.current_player)):
@@ -184,4 +216,4 @@ class Zsir:
         self.current_player = self.first_player
         self.last_round_winner = takes_trick   
         self.deal() 
-        return False  
+        return False
