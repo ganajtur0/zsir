@@ -115,12 +115,14 @@ class Player:
         self.stash = []
 
 class Zsir:
-    def __init__(self, players, human):
+    def __init__(self, players, human, first_player):
+        # DEBUG
+        # self.game_over = True
         self.game_over = False
         self.players = players
         self.human = human
-        self.current_player = 0
-        self.first_player = 0
+        self.current_player = first_player
+        self.first_player = first_player
         self.num_players = len(players)
         self.deck = deck.copy()
         self.house = []
@@ -135,9 +137,10 @@ class Zsir:
             print("Vége")
             self.game_over = True
             return
+        decklen_half = ceil(len(self.deck)/2)
         for i in range(self.num_players):
-            for j in range(min(4 - len(self.players[i].hand),
-                               ceil(len(self.deck)/2))):
+            for _ in range(min(4 - len(self.players[i].hand),
+                               decklen_half)):
                 self.players[i].hand.append(self.deck.pop())
 
     def make_move(self, card):
@@ -192,6 +195,21 @@ class Zsir:
                 if player.score > player_score:
                     return EndResult.LOST
         return EndResult.WON
+    
+    def restart(self):
+        self.game_over = False
+        self.deck = deck.copy()
+        self.first_player = self.human
+        self.current_player = self.first_player
+        self.house = []
+        self.last_round_winner = -1
+        self.round = 0
+        self.let_it_go_decision = False
+        shuffle(self.deck)
+        self.deal()
+        for player in self.players:
+            player.stash = []
+            player.score = 0
 
     def evaluate_round(self):
         takes_trick = self.first_player

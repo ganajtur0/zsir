@@ -271,7 +271,8 @@ class GameOverScreen(pg.sprite.Sprite):
                  padding,
                  player_names,
                  player_scores,
-                 text):
+                 text,
+                 reset_func):
         pg.sprite.Sprite.__init__(self)
         self.image = pg.Surface(size)
         self.scr_width, self.scr_height = pg.display.get_surface().get_size()
@@ -284,9 +285,11 @@ class GameOverScreen(pg.sprite.Sprite):
         self.padding = padding
         self.names = player_names
         self.scores = player_scores
+        self.size = size
+        self.button_click_handled = False
+        self.reset_func = reset_func
         self.render_text()
     
-    # TODO: render the rest
     def render_text(self):
         self.title_font_surface = self.title_font.render(self.text, True, BLACK)
         self.title_font_rect = self.title_font_surface.get_rect(center=(self.rect.width//2, self.padding[1]))
@@ -318,16 +321,19 @@ class GameOverScreen(pg.sprite.Sprite):
         self.tween.update()
         self.title_font_rect.y = self.tween.value
         self.image.fill(pg.Color("pink"))
+        # self.restart_button.update()
+        # self.image.blit(self.restart_button.image, self.restart_button.rect)
         self.image.blit(self.title_font_surface, self.title_font_rect)
         for player_text in self.player_texts:
             self.image.blit(player_text[0][0], player_text[0][1])
             self.image.blit(player_text[1][0], player_text[1][1])
-
+            
 class GameGUI:
     def __init__(self):
         self.animation_playing = False
         self.timer = Timer()
         self.has_screen = False
+        self.game_over_screen_sprite = None
         self.card_spritegroup = pg.sprite.Group()
         self.button_spritegroup = pg.sprite.Group()
         self.pg_init()
@@ -348,10 +354,21 @@ class GameGUI:
         self.screen.blit(self.background, (0,0))
         pg.display.flip()
 
+    def restart_game(self):
+        self.zsirjatek.restart()
+        if self.game_over_screen_sprite:
+            self.button_spritegroup.remove(self.restart_button)
+            self.button_spritegroup.remove(self.game_over_screen_sprite)
+            self.game_over_screen_sprite = None
+            self.has_screen = False
+        self.create_card_sprites()
+        self.rearrange_card_sprites(self.player_cards)
+        self.rearrange_card_sprites(self.opponent1_cards)
+
     def start_game(self):
         self.zsirjatek = Zsir([Player("Te", False),
                               Player("Gyula", True)],
-                              0)
+                              0, 0)
         self.zsirjatek.deal()
         self.create_button_sprites()
         self.create_card_sprites()
@@ -429,11 +446,22 @@ class GameGUI:
                 final_text = "Azoszt igen ez igen"
             case EndResult.LOST:
                 final_text = "Gyakorolj még asztán keress meg"
-        self.button_spritegroup.add(GameOverScreen((480, 480),
-                                                   (20, 20),
-                                                   [p.name for p in self.zsirjatek.players],
-                                                   [p.score for p in self.zsirjatek.players],
-                                                   final_text))     
+        self.game_over_screen_sprite = GameOverScreen((480, 480),
+                                              (20, 20),
+                                              [p.name for p in self.zsirjatek.players],
+                                              [p.score for p in self.zsirjatek.players],
+                                              final_text,
+                                              self.restart_game)
+        self.restart_button = ButtonSprite((640, 500),
+                                           200, 80,
+                                           pg.Color("brown1"),
+                                           pg.Color("brown"),
+                                           pg.Color("brown1"),
+                                           "Még egy kör",
+                                           self.restart_game)
+        self.restart_button.enabled = True
+        self.button_spritegroup.add(self.game_over_screen_sprite)
+        self.button_spritegroup.add(self.restart_button)     
         self.has_screen = True
     
     def rearrange_card_sprites(self, card_sprites):
