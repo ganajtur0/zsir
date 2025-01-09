@@ -1,0 +1,51 @@
+NET "clk" LOC = "P90";
+NET "clk" TNM_NET = "clk";
+TIMESPEC "TS_clk" = PERIOD "clk" 150 MHz;
+# NET "clk" CLOCK_DEDICATED_ROUTE = FALSE;
+
+NET "rst" LOC = "P9";
+NET "rst" PULLUP;
+
+NET "i_SPI_MISO" LOC = "P81";
+NET "o_SPI_clk"  LOC = "P85";
+NET "o_SPI_CS_n" LOC = "P72";
+
+NET "select_btn" LOC = "P71";
+NET "start_btn"  LOC = "P68";
+
+NET "rotary_A" LOC = "P67";
+NET "rotary_B" LOC = "P65";
+
+NET "heating_relay" LOC = "P55";
+NET "done" 			  LOC = "P59";
+
+NET "recipe_leds[7]" LOC = "P61";
+NET "recipe_leds[6]" LOC = "P60";
+NET "recipe_leds[5]" LOC = "P62";
+NET "recipe_leds[4]" LOC = "P48";
+NET "recipe_leds[3]" LOC = "P47";
+NET "recipe_leds[2]" LOC = "P44";
+NET "recipe_leds[1]" LOC = "P43";
+NET "recipe_leds[0]" LOC = "P42";
+
+NET "segments_time[6]" LOC = "P40";
+NET "segments_time[5]" LOC = "P28";
+NET "segments_time[4]" LOC = "P27";
+NET "segments_time[3]" LOC = "P32";
+NET "segments_time[2]" LOC = "P30";
+NET "segments_time[1]" LOC = "P35";
+NET "segments_time[0]" LOC = "P34";
+
+NET "segments_temp[6]" LOC = "P17";
+NET "segments_temp[5]" LOC = "P21";
+NET "segments_temp[4]" LOC = "P23";
+NET "segments_temp[3]" LOC = "P22";
+NET "segments_temp[2]" LOC = "P16";
+NET "segments_temp[1]" LOC = "P15";
+NET "segments_temp[0]" LOC = "P14";
+
+NET "digit_sel_time[1]" LOC = "P13";
+NET "digit_sel_time[0]" LOC = "P2";
+
+NET "digit_sel_temp[1]" LOC = "P5";
+NET "digit_sel_temp[0]" LOC = "P4";
